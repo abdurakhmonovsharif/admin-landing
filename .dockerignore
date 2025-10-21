@@ -1,0 +1,14 @@
+.git
+.husky
+.next
+.turbo
+node_modules
+coverage
+npm-debug.log
+Dockerfile
+docker-compose.yml
+.env
+.env.*
+*.local
+README.md
+LICENSE

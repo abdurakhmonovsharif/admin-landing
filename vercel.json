@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "http://185.217.131.110:9090/api/$1"
+    }
+  ]
+}

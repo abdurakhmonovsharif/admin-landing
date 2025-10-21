@@ -1,0 +1,13 @@
+services:
+  web:
+    build:
+      context: .
+      target: runner
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+    restart: unless-stopped
+    # Uncomment to load environment variables from a file.
+    # env_file:
+    #   - .env.production
