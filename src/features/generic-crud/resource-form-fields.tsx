@@ -379,7 +379,7 @@ const SOCIAL_PLATFORM_OPTIONS = [
   { value: "youtube", label: "YouTube" },
 ] as const;
 
-const SOCIAL_PLATFORM_SET = new Set(SOCIAL_PLATFORM_OPTIONS.map((option) => option.value));
+const SOCIAL_PLATFORM_SET = new Set<string>(SOCIAL_PLATFORM_OPTIONS.map((option) => option.value));
 
 function SocialLinksField({ descriptor }: { descriptor: Extract<FieldDescriptor, { type: "social-links" }> }) {
   const formContext = useFormContext<Record<string, unknown>>();

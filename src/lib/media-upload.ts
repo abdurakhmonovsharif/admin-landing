@@ -13,20 +13,47 @@ export type UploadedMedia = {
   rawUrl?: string;
 };
 
+const sanitizeAbsoluteUrl = (value?: string | null): string | undefined => {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  if (!trimmed || !/^https?:\/\//i.test(trimmed)) {
+    return undefined;
+  }
+  return trimmed.replace(/\/$/, "");
+};
+
+const STATIC_MEDIA_BASE_URL =
+  sanitizeAbsoluteUrl(process.env.NEXT_PUBLIC_STORAGE_URL) ??
+  sanitizeAbsoluteUrl(API_BASE_URL) ??
+  sanitizeAbsoluteUrl(process.env.NEXT_PUBLIC_API_URL_PROD) ??
+  sanitizeAbsoluteUrl(process.env.NEXT_PUBLIC_API_URL_LOCAL);
+
+const resolveBaseUrl = (): string | undefined => {
+  if (STATIC_MEDIA_BASE_URL) {
+    return STATIC_MEDIA_BASE_URL;
+  }
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return window.location.origin.replace(/\/$/, "");
+  }
+  return undefined;
+};
+
 export const resolveMediaUrl = (url?: string, path?: string): string | undefined => {
-  const base = API_BASE_URL.replace(/\/$/, "");
+  const base = resolveBaseUrl();
 
   if (url && url.length > 0) {
     if (/^https?:\/\//i.test(url)) {
       return url;
     }
     const normalized = url.startsWith("/") ? url.slice(1) : url;
-    return `${base}/${normalized}`;
+    return base ? `${base}/${normalized}` : `/${normalized}`;
   }
 
   if (path && path.length > 0) {
     const normalizedPath = path.startsWith("/") ? path.slice(1) : path;
-    return `${base}/files/${normalizedPath}`;
+    return base ? `${base}/files/${normalizedPath}` : `/files/${normalizedPath}`;
   }
 
   return undefined;

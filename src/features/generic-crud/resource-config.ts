@@ -114,6 +114,9 @@ const getStringArrayField = (value: unknown, key: string): string[] => {
 
 const CONTACT_SOCIAL_PLATFORMS = ["instagram", "linkedin", "telegram", "youtube"] as const;
 const CONTACT_SOCIAL_PLATFORM_SET = new Set<string>(CONTACT_SOCIAL_PLATFORMS);
+const CONTACT_SOCIAL_PLATFORM_SCHEMA = z.enum(CONTACT_SOCIAL_PLATFORMS, {
+  message: "Platformani tanlang",
+});
 
 const REGION_LABEL_LOOKUP = new Map<string, string>(
   REGION_OPTIONS.map((option) => [option.value, option.labels.uz])
@@ -662,10 +665,7 @@ const resourceConfigs: Record<ResourceKey, ResourceConfig> = {
       socialMedia: z
         .array(
           z.object({
-            platform: z.enum(CONTACT_SOCIAL_PLATFORMS, {
-              required_error: "Platformani tanlang",
-              invalid_type_error: "Platformani tanlang",
-            }),
+            platform: CONTACT_SOCIAL_PLATFORM_SCHEMA,
             link: z.string().url("URL noto‘g‘ri"),
           })
         )
