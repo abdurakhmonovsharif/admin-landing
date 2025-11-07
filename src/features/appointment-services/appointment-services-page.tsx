@@ -213,7 +213,10 @@ export function AppointmentServicesPage() {
     {
       accessorKey: "appointment",
       header: "Appointment",
-      cell: ({ row }) => row.original.appointment?.titleUz ?? "—",
+      cell: ({ row }) => {
+        
+        return row.original?.titleUz ?? "—"
+      },
     },
     {
       accessorKey: "location",

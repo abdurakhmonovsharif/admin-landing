@@ -372,66 +372,18 @@ function BooleanField({ descriptor }: { descriptor: Extract<FieldDescriptor, { t
   );
 }
 
+const SOCIAL_PLATFORM_OPTIONS = [
+  { value: "instagram", label: "Instagram" },
+  { value: "linkedin", label: "LinkedIn" },
+  { value: "telegram", label: "Telegram" },
+  { value: "youtube", label: "YouTube" },
+] as const;
+
+const SOCIAL_PLATFORM_SET = new Set(SOCIAL_PLATFORM_OPTIONS.map((option) => option.value));
+
 function SocialLinksField({ descriptor }: { descriptor: Extract<FieldDescriptor, { type: "social-links" }> }) {
   const formContext = useFormContext<Record<string, unknown>>();
   const { control, getFieldState } = formContext;
-  const uploadsRegistry = useEditorUploadsContext();
-  const pendingUploadsRef = useRef(new Map<string, UploadedMedia>());
-  const fileInputRefs = useRef(new Map<number, HTMLInputElement | null>());
-  const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
-
-  const discardUploads = useCallback(async () => {
-    const entries = Array.from(pendingUploadsRef.current.values());
-    pendingUploadsRef.current.clear();
-    if (entries.length === 0) return;
-    await Promise.allSettled(
-      entries.map((entry) =>
-        deleteMediaFile({
-          path: entry.path,
-          url: entry.rawUrl ?? entry.url,
-        })
-      )
-    );
-  }, []);
-
-  const commitUploads = useCallback(() => {
-    pendingUploadsRef.current.clear();
-  }, []);
-
-  useEffect(() => {
-    if (!uploadsRegistry) return;
-    const unregister = uploadsRegistry.register({
-      discardUploads,
-      commitUploads,
-    });
-    return () => {
-      unregister();
-    };
-  }, [uploadsRegistry, discardUploads, commitUploads]);
-
-  const setFileInputRef = useCallback((index: number, node: HTMLInputElement | null) => {
-    if (node) {
-      fileInputRefs.current.set(index, node);
-    } else {
-      fileInputRefs.current.delete(index);
-    }
-  }, []);
-
-  const deletePendingUpload = useCallback(async (url?: string) => {
-    if (!url) return;
-    const pending = pendingUploadsRef.current.get(url);
-    if (!pending) return;
-    pendingUploadsRef.current.delete(url);
-    try {
-      await deleteMediaFile({
-        path: pending.path,
-        url: pending.rawUrl ?? pending.url,
-      });
-    } catch (error) {
-      const description = error instanceof Error ? error.message : undefined;
-      toast.error("Platform rasmni o‘chirishda xatolik", { description });
-    }
-  }, []);
 
   return (
     <FormField
@@ -443,18 +395,22 @@ function SocialLinksField({ descriptor }: { descriptor: Extract<FieldDescriptor,
           .map((item) => {
             if (item && typeof item === "object") {
               const record = item as Record<string, unknown>;
-              const platform = getRecordString(record, "platform") ?? "";
+              const platformRaw = getRecordString(record, "platform") ?? "";
+              const platform = platformRaw && SOCIAL_PLATFORM_SET.has(platformRaw) ? platformRaw : "";
               const link = getRecordString(record, "link") ?? "";
               return { platform, link };
             }
             if (typeof item === "string") {
               try {
                 const parsed = JSON.parse(item) as Record<string, unknown>;
-                const platform = getRecordString(parsed, "platform") ?? "";
+                const platformRaw = getRecordString(parsed, "platform") ?? "";
+                const platform = platformRaw && SOCIAL_PLATFORM_SET.has(platformRaw) ? platformRaw : "";
                 const link = getRecordString(parsed, "link") ?? "";
                 return { platform, link };
               } catch {
-                return { platform: item, link: "" };
+                const normalizedItem = item.trim().toLowerCase();
+                const platform = SOCIAL_PLATFORM_SET.has(normalizedItem) ? normalizedItem : "";
+                return { platform, link: "" };
               }
             }
             return { platform: "", link: "" };
@@ -466,51 +422,19 @@ function SocialLinksField({ descriptor }: { descriptor: Extract<FieldDescriptor,
           field.onBlur();
         };
 
-        const handleAdd = () => {
-          updateValues([...values, { platform: "", link: "" }]);
+        const resolveDefaultPlatform = () => {
+          const usedPlatforms = new Set(values.map((value) => value.platform).filter(Boolean));
+          const available = SOCIAL_PLATFORM_OPTIONS.find((option) => !usedPlatforms.has(option.value));
+          return available?.value ?? "";
         };
 
-        const handleRemove = async (index: number) => {
-          const target = values[index];
-          if (target?.platform) {
-            await deletePendingUpload(target.platform);
-          }
+        const handleAdd = () => {
+          updateValues([...values, { platform: resolveDefaultPlatform(), link: "" }]);
+        };
+
+        const handleRemove = (index: number) => {
           const next = values.filter((_, i) => i !== index);
           updateValues(next);
-        };
-
-        const openFileDialog = (index: number) => {
-          fileInputRefs.current.get(index)?.click();
-        };
-
-        const handleFileChange = async (index: number, files: FileList | null) => {
-          if (!files || files.length === 0) return;
-          const file = files[0];
-          setUploadingIndex(index);
-          try {
-            const uploaded = await uploadMediaFile(descriptor.uploadCategory, file);
-            const storedValue = uploaded.rawUrl ?? uploaded.url;
-            const previousPlatform = values[index]?.platform;
-            if (previousPlatform && previousPlatform !== storedValue) {
-              await deletePendingUpload(previousPlatform);
-            }
-            pendingUploadsRef.current.set(storedValue, uploaded);
-            const next = [...values];
-            next[index] = {
-              ...next[index],
-              platform: storedValue,
-            };
-            updateValues(next);
-          } catch (error) {
-            const description = error instanceof Error ? error.message : undefined;
-            toast.error("Platform rasmni yuklashda xatolik", { description });
-          } finally {
-            setUploadingIndex((current) => (current === index ? null : current));
-            const input = fileInputRefs.current.get(index);
-            if (input) {
-              input.value = "";
-            }
-          }
         };
 
         const handleLinkChange = (index: number, link: string) => {
@@ -535,51 +459,51 @@ function SocialLinksField({ descriptor }: { descriptor: Extract<FieldDescriptor,
                 values.map((item, index) => {
                   const platformState = getFieldState(`${descriptor.name}.${index}.platform` as never);
                   const linkState = getFieldState(`${descriptor.name}.${index}.link` as never);
+                  const takenPlatforms = new Set(
+                    values.map((value, valueIndex) => (valueIndex === index ? undefined : value.platform)).filter(
+                      (platform): platform is string => Boolean(platform)
+                    )
+                  );
+
                   return (
                     <div
                       key={`${descriptor.name}-${index}`}
                       className="space-y-3 rounded-lg border p-4"
                     >
                       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="h-16 w-16 overflow-hidden rounded-md border bg-muted">
-                            {item.platform ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={resolveMediaUrl(item.platform) ?? item.platform}
-                                alt="Platform icon"
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
-                                Rasm yo‘q
-                              </div>
-                            )}
-                          </div>
-                          <div className="space-y-1">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => openFileDialog(index)}
-                              disabled={uploadingIndex === index}
-                            >
-                              {uploadingIndex === index ? (
-                                <>
-                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                  Yuklanmoqda...
-                                </>
-                              ) : (
-                                <>
-                                  <Upload className="mr-2 h-4 w-4" />
-                                  Platforma rasmini yuklash
-                                </>
-                              )}
-                            </Button>
-                            {platformState.error ? (
-                              <p className="text-xs text-destructive">{platformState.error.message}</p>
-                            ) : null}
-                          </div>
+                        <div className="space-y-1">
+                          <label className="text-xs text-muted-foreground">Platforma</label>
+                          <Select
+                            value={
+                              item.platform && SOCIAL_PLATFORM_SET.has(item.platform) ? item.platform : undefined
+                            }
+                            onValueChange={(value) => {
+                              const next = [...values];
+                              next[index] = {
+                                ...next[index],
+                                platform: value,
+                              };
+                              updateValues(next);
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Tanlang" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {SOCIAL_PLATFORM_OPTIONS.map((option) => (
+                                <SelectItem
+                                  key={option.value}
+                                  value={option.value}
+                                  disabled={takenPlatforms.has(option.value)}
+                                >
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {platformState.error ? (
+                            <p className="text-xs text-destructive">{platformState.error.message}</p>
+                          ) : null}
                         </div>
                         <Button
                           type="button"
@@ -587,7 +511,7 @@ function SocialLinksField({ descriptor }: { descriptor: Extract<FieldDescriptor,
                           size="icon"
                           className="text-destructive hover:text-destructive"
                           onClick={() => {
-                            void handleRemove(index);
+                            handleRemove(index);
                           }}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -605,15 +529,6 @@ function SocialLinksField({ descriptor }: { descriptor: Extract<FieldDescriptor,
                           <p className="mt-1 text-xs text-destructive">{linkState.error.message}</p>
                         ) : null}
                       </div>
-                      <input
-                        ref={(node) => setFileInputRef(index, node)}
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(event) => {
-                          void handleFileChange(index, event.target.files);
-                        }}
-                      />
                     </div>
                   );
                 })
@@ -831,15 +746,25 @@ function MediaUploadField({ descriptor }: { descriptor: Extract<FieldDescriptor,
           const handleRemove = async (url: string) => {
             const next = values.filter((value) => value !== url);
             applyValues(next);
+            if (!url) return;
+
             const pendingEntry = pendingUploadsRef.current.get(url);
-            if (!pendingEntry) {
+            if (pendingEntry) {
+              pendingUploadsRef.current.delete(url);
+            }
+
+            const valueLooksLikeUrl = /^https?:\/\//i.test(url);
+            const targetPath = pendingEntry?.path ?? (valueLooksLikeUrl ? undefined : url);
+            const targetUrl = pendingEntry?.rawUrl ?? pendingEntry?.url ?? (valueLooksLikeUrl ? url : undefined);
+
+            if (!targetPath && !targetUrl) {
               return;
             }
-            pendingUploadsRef.current.delete(url);
+
             try {
               await deleteMediaFile({
-                path: pendingEntry.path,
-                url: pendingEntry.rawUrl ?? pendingEntry.url,
+                path: targetPath ?? undefined,
+                url: targetUrl ?? undefined,
               });
             } catch (error) {
               const description = error instanceof Error ? error.message : undefined;

@@ -4,6 +4,20 @@
     {
       "source": "/api/(.*)",
       "destination": "http://185.217.131.110:9090/api/$1"
+    },
+    {
+      "source": "/storage/(.*)",
+      "destination": "http://185.217.131.110:9090/storage/$1"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET,OPTIONS,PATCH,DELETE,POST,PUT" },
+        { "key": "Access-Control-Allow-Headers", "value": "X-Requested-With, Content-Type, Authorization" }
+      ]
     }
   ]
 }

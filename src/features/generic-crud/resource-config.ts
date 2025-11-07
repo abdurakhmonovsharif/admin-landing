@@ -26,6 +26,63 @@ import type { Vacancy } from "@/lib/api/models/Vacancy";
 import { localTimeToString } from "@/lib/time";
 import type { ResourceConfig, ResourceKey } from "./types";
 
+type RegionOption = {
+  value: string;
+  labels: { en: string; uz: string; ru: string };
+  aliases: string[];
+};
+
+const REGION_OPTIONS = [
+  { value: "Andijan", labels: { en: "Andijan", uz: "Andijon", ru: "Андижан" }, aliases: ["andijan", "andijon"] },
+  { value: "Bukhara", labels: { en: "Bukhara", uz: "Buxoro", ru: "Бухара" }, aliases: ["bukhara", "buxoro"] },
+  {
+    value: "Fergana",
+    labels: { en: "Fergana", uz: "Farg'ona", ru: "Фергана" },
+    aliases: ["fergana", "farg'ona", "fargona"],
+  },
+  { value: "Jizzakh", labels: { en: "Jizzakh", uz: "Jizzax", ru: "Джизак" }, aliases: ["jizzakh", "jizzax"] },
+  {
+    value: "Kashkadarya",
+    labels: { en: "Kashkadarya", uz: "Qashqadaryo", ru: "Кашкадарья" },
+    aliases: ["kashkadarya", "qashqadaryo"],
+  },
+  { value: "Khorezm", labels: { en: "Khorezm", uz: "Xorazm", ru: "Хорезм" }, aliases: ["khorezm", "xorazm"] },
+  { value: "Namangan", labels: { en: "Namangan", uz: "Namangan", ru: "Наманган" }, aliases: ["namangan"] },
+  { value: "Navoi", labels: { en: "Navoi", uz: "Navoiy", ru: "Навои" }, aliases: ["navoi", "navoiy"] },
+  {
+    value: "Samarkand",
+    labels: { en: "Samarkand", uz: "Samarqand", ru: "Самарканд" },
+    aliases: ["samarkand", "samarqand"],
+  },
+  {
+    value: "Surkhandarya",
+    labels: { en: "Surkhandarya", uz: "Surxondaryo", ru: "Сурхандарья" },
+    aliases: ["surkhandarya", "surxondaryo"],
+  },
+  { value: "Syrdarya", labels: { en: "Syrdarya", uz: "Sirdaryo", ru: "Сырдарья" }, aliases: ["syrdarya", "sirdaryo"] },
+  {
+    value: "Tashkent Region",
+    labels: { en: "Tashkent Region", uz: "Toshkent viloyati", ru: "Ташкентская область" },
+    aliases: ["tashkent region", "toshkent viloyati"],
+  },
+  {
+    value: "Karakalpakstan",
+    labels: { en: "Karakalpakstan", uz: "Qoraqalpog'iston", ru: "Каракалпакстан" },
+    aliases: ["karakalpakstan", "qoraqalpog'iston"],
+  },
+  {
+    value: "Tashkent City",
+    labels: { en: "Tashkent City", uz: "Toshkent shahri", ru: "Город Ташкент" },
+    aliases: ["tashkent city", "tashkent"],
+  },
+] as const satisfies readonly RegionOption[];
+
+type RegionValue = (typeof REGION_OPTIONS)[number]["value"];
+
+const REGION_VALUE_ENUM = z.enum(
+  REGION_OPTIONS.map((option) => option.value) as [RegionValue, ...RegionValue[]]
+);
+
 const multilingualText = (label: string, required = true) => ({
   [`${label}Uz`]: required
     ? z.string().min(1, { message: "Majburiy" })
@@ -54,6 +111,18 @@ const getStringArrayField = (value: unknown, key: string): string[] => {
   const field = record?.[key];
   return Array.isArray(field) ? (field as string[]) : [];
 };
+
+const CONTACT_SOCIAL_PLATFORMS = ["instagram", "linkedin", "telegram", "youtube"] as const;
+const CONTACT_SOCIAL_PLATFORM_SET = new Set<string>(CONTACT_SOCIAL_PLATFORMS);
+
+const REGION_LABEL_LOOKUP = new Map<string, string>(
+  REGION_OPTIONS.map((option) => [option.value, option.labels.uz])
+);
+
+const REGION_SELECT_OPTIONS = REGION_OPTIONS.map((option) => ({
+  value: option.value,
+  label: option.labels.uz,
+}));
 
 const getLocalTimeField = (value: unknown, key: string): unknown => {
   const record = asRecord(value);
@@ -587,10 +656,16 @@ const resourceConfigs: Record<ResourceKey, ResourceConfig> = {
       phoneNumber: z.string().min(1, { message: "Majburiy" }),
       email: z.string().email("Email noto‘g‘ri"),
       address: z.string().min(1, { message: "Majburiy" }),
+      bannerMediaType: z.enum(["image", "video"]).default("image"),
+      banner: z.string().optional().or(z.literal("")),
+      introductionVideo: z.string().optional().or(z.literal("")),
       socialMedia: z
         .array(
           z.object({
-            platform: z.string().min(1, { message: "Platforma rasmini yuklang" }),
+            platform: z.enum(CONTACT_SOCIAL_PLATFORMS, {
+              required_error: "Platformani tanlang",
+              invalid_type_error: "Platformani tanlang",
+            }),
             link: z.string().url("URL noto‘g‘ri"),
           })
         )
@@ -600,6 +675,9 @@ const resourceConfigs: Record<ResourceKey, ResourceConfig> = {
       phoneNumber: "",
       email: "",
       address: "",
+      bannerMediaType: "image",
+      banner: "",
+      introductionVideo: "",
       socialMedia: [],
     },
     fields: [
@@ -607,32 +685,63 @@ const resourceConfigs: Record<ResourceKey, ResourceConfig> = {
       { type: "text", name: "email", label: "Email", required: true },
       { type: "text", name: "address", label: "Manzil", required: true },
       {
+        type: "media-upload",
+        name: "banner",
+        label: "Banner",
+        uploadCategory: "contacts",
+        mediaTypeField: "bannerMediaType",
+        mode: "single",
+        accept: "image/*,video/*",
+        helperText: "Rasm yoki video yuklang. Video tanlanganda faylni yuklab, ko‘rish tugmasidan tekshiring.",
+      },
+      {
+        type: "media-upload",
+        name: "introductionVideo",
+        label: "Tanishuv videosi",
+        uploadCategory: "contacts",
+        mode: "single",
+        accept: "video/*",
+        uploadButtonLabel: "Video",
+        counterLabel: "video",
+        helperText: "Video yuklang. Saqlanmaguncha bekor qilinsa, yangi yuklangan video o‘chiriladi.",
+      },
+      {
         type: "social-links",
         name: "socialMedia",
         label: "Ijtimoiy tarmoqlar",
-        uploadCategory: "contacts",
-        helperText: "Har bir ijtimoiy tarmoq uchun ikonka yuklang va havolani kiriting.",
+        helperText: "Platformani tanlab, havolasini kiriting.",
       },
     ],
     toFormValues: (record) => {
       const item = (record as Partial<Contact>) ?? {};
+      const extendedItem = item as Partial<Contact> & { banner?: string; bannerMediaType?: string };
       const socials = Array.isArray(item.socialMedia)
         ? item.socialMedia
             .map((entry) => {
               if (typeof entry === "string") {
                 try {
                   const parsed = JSON.parse(entry) as Record<string, unknown>;
-                  const platform = getStringField(parsed, "platform") ?? "";
-                  const link = getStringField(parsed, "link") ?? "";
+                  const platformRaw = getStringField(parsed, "platform");
+                  const normalizedPlatform =
+                    typeof platformRaw === "string" ? platformRaw.trim().toLowerCase() : "";
+                  const platform = CONTACT_SOCIAL_PLATFORM_SET.has(normalizedPlatform) ? normalizedPlatform : "";
+                  const linkRaw = getStringField(parsed, "link");
+                  const link = typeof linkRaw === "string" ? linkRaw.trim() : "";
                   return { platform, link };
                 } catch {
-                  return { platform: entry, link: "" };
+                  const normalizedEntry = typeof entry === "string" ? entry.trim().toLowerCase() : "";
+                  const platform = CONTACT_SOCIAL_PLATFORM_SET.has(normalizedEntry) ? normalizedEntry : "";
+                  return { platform, link: "" };
                 }
               }
               if (entry && typeof entry === "object") {
                 const recordEntry = entry as Record<string, unknown>;
-                const platform = getStringField(recordEntry, "platform") ?? "";
-                const link = getStringField(recordEntry, "link") ?? "";
+                const platformRaw = getStringField(recordEntry, "platform");
+                const normalizedPlatform =
+                  typeof platformRaw === "string" ? platformRaw.trim().toLowerCase() : "";
+                const platform = CONTACT_SOCIAL_PLATFORM_SET.has(normalizedPlatform) ? normalizedPlatform : "";
+                const linkRaw = getStringField(recordEntry, "link");
+                const link = typeof linkRaw === "string" ? linkRaw.trim() : "";
                 return { platform, link };
               }
               return { platform: "", link: "" };
@@ -643,6 +752,14 @@ const resourceConfigs: Record<ResourceKey, ResourceConfig> = {
         phoneNumber: typeof item.phoneNumber === "string" ? item.phoneNumber : "",
         email: typeof item.email === "string" ? item.email : "",
         address: typeof item.address === "string" ? item.address : "",
+        banner: typeof extendedItem.banner === "string" ? extendedItem.banner : "",
+        introductionVideo: typeof item.introductionVideo === "string" ? item.introductionVideo : "",
+        bannerMediaType:
+          typeof extendedItem.bannerMediaType === "string"
+            ? extendedItem.bannerMediaType.toLowerCase() === "video"
+              ? "video"
+              : "image"
+            : "image",
         socialMedia: socials,
       };
     },
@@ -651,14 +768,22 @@ const resourceConfigs: Record<ResourceKey, ResourceConfig> = {
       const phoneNumber = getStringField(data, "phoneNumber") ?? "";
       const email = getStringField(data, "email") ?? "";
       const address = getStringField(data, "address") ?? "";
+      const banner = getStringField(data, "banner");
+      const introductionVideo = getStringField(data, "introductionVideo");
+      const bannerMediaTypeRaw = getStringField(data, "bannerMediaType")?.toLowerCase();
+      const bannerMediaType = bannerMediaTypeRaw === "video" ? "video" : "image";
       const socialRaw = data.socialMedia;
       const socialMedia = Array.isArray(socialRaw)
         ? (socialRaw as unknown[])
             .map((entry) => {
               if (entry && typeof entry === "object") {
                 const recordEntry = entry as Record<string, unknown>;
-                const platform = getStringField(recordEntry, "platform") ?? "";
-                const link = getStringField(recordEntry, "link") ?? "";
+                const platformRaw = getStringField(recordEntry, "platform");
+                const normalizedPlatform =
+                  typeof platformRaw === "string" ? platformRaw.trim().toLowerCase() : "";
+                const platform = CONTACT_SOCIAL_PLATFORM_SET.has(normalizedPlatform) ? normalizedPlatform : "";
+                const linkRaw = getStringField(recordEntry, "link");
+                const link = typeof linkRaw === "string" ? linkRaw.trim() : "";
                 if (!platform || !link) {
                   return null;
                 }
@@ -672,6 +797,9 @@ const resourceConfigs: Record<ResourceKey, ResourceConfig> = {
         phoneNumber,
         email,
         address,
+        banner: banner || undefined,
+        introductionVideo: introductionVideo || undefined,
+        bannerMediaType,
         socialMedia,
       };
     },
@@ -693,6 +821,17 @@ const resourceConfigs: Record<ResourceKey, ResourceConfig> = {
       { accessorKey: "id", header: "ID" },
       { accessorKey: "nameUz", header: "Nom (UZ)" },
       {
+        accessorKey: "region",
+        header: "Hudud",
+        cell: ({ row }) => {
+          const region = getStringField(row.original, "region");
+          if (!region) {
+            return "";
+          }
+          return REGION_LABEL_LOOKUP.get(region) ?? region;
+        },
+      },
+      {
         accessorKey: "openTime",
         header: "Ochilish",
         cell: ({ row }) =>
@@ -712,11 +851,12 @@ const resourceConfigs: Record<ResourceKey, ResourceConfig> = {
     ],
     schema: z.object({
       ...multilingualText("name"),
+      region: REGION_VALUE_ENUM,
+      ...multilingualText("address"),
       mapTag: z.string().optional().or(z.literal("")),
       openTime: z.string().optional().or(z.literal("")),
       closeTime: z.string().optional().or(z.literal("")),
       workDays: z.array(z.string()).default([]),
-      address: z.string().min(1, { message: "Majburiy" }),
       images: z
         .array(
           z.string().min(1, {
@@ -729,20 +869,24 @@ const resourceConfigs: Record<ResourceKey, ResourceConfig> = {
       nameUz: "",
       nameRu: "",
       nameEn: "",
+      region: "",
+      addressUz: "",
+      addressRu: "",
+      addressEn: "",
       mapTag: "",
       openTime: "",
       closeTime: "",
       workDays: [],
-      address: "",
       images: [],
     },
     fields: [
       { type: "multilingual", baseName: "name", label: "Nom", required: true },
-      { type: "text", name: "mapTag", label: "Map tag" },
+      { type: "select", name: "region", label: "Hudud", options: REGION_SELECT_OPTIONS, required: true },
+      { type: "multilingual", baseName: "address", label: "Manzil", required: true },
+      { type: "textarea", name: "mapTag", label: "Map tag" },
       { type: "time", name: "openTime", label: "Ochilish vaqti" },
       { type: "time", name: "closeTime", label: "Yopilish vaqti" },
       { type: "array", name: "workDays", label: "Ish kunlari", itemLabel: "Kun" },
-      { type: "text", name: "address", label: "Manzil", required: true },
       {
         type: "media-upload",
         name: "images",
@@ -754,6 +898,15 @@ const resourceConfigs: Record<ResourceKey, ResourceConfig> = {
     toFormValues: (record) => {
       const location = (record as Partial<Location>) ?? {};
 
+      const addressUz =
+        typeof location.addressUz === "string" && location.addressUz
+          ? location.addressUz
+          : typeof location.address === "string"
+            ? location.address
+            : "";
+      const addressRu = typeof location.addressRu === "string" ? location.addressRu : "";
+      const addressEn = typeof location.addressEn === "string" ? location.addressEn : "";
+
       return {
         ...location,
         openTime: localTimeToString(location.openTime as LocalTime | undefined),
@@ -761,6 +914,10 @@ const resourceConfigs: Record<ResourceKey, ResourceConfig> = {
         workDays: Array.isArray(location.workDays) ? location.workDays : [],
         images: Array.isArray(location.images) ? location.images : [],
         mapTag: typeof location.mapTag === "string" ? location.mapTag : "",
+        region: typeof location.region === "string" ? location.region : "",
+        addressUz,
+        addressRu,
+        addressEn,
       };
     },
     toPayload: (values) => {
@@ -769,16 +926,25 @@ const resourceConfigs: Record<ResourceKey, ResourceConfig> = {
       const nameRu = getStringField(data, "nameRu");
       const nameEn = getStringField(data, "nameEn");
       const mapTag = getStringField(data, "mapTag");
-      const address = getStringField(data, "address") ?? "";
       const workDays = getStringArrayField(data, "workDays");
       const images = getStringArrayField(data, "images");
       const openTime = getStringField(data, "openTime") || undefined;
       const closeTime = getStringField(data, "closeTime") || undefined;
+      const regionRaw = getStringField(data, "region");
+      const region = regionRaw ? REGION_VALUE_ENUM.parse(regionRaw) : undefined;
+      const addressUz = getStringField(data, "addressUz") ?? "";
+      const addressRuRaw = getStringField(data, "addressRu");
+      const addressEnRaw = getStringField(data, "addressEn");
+      const fallbackAddress = getStringField(data, "address");
+      const address = addressUz || fallbackAddress || "";
+      const hasAddressRu = Object.prototype.hasOwnProperty.call(data, "addressRu");
+      const hasAddressEn = Object.prototype.hasOwnProperty.call(data, "addressEn");
 
-      return {
+      const payload: Record<string, unknown> = {
         nameUz,
         nameRu: nameRu || undefined,
         nameEn: nameEn || undefined,
+        region,
         mapTag: mapTag || undefined,
         address,
         workDays,
@@ -786,6 +952,16 @@ const resourceConfigs: Record<ResourceKey, ResourceConfig> = {
         openTime,
         closeTime,
       };
+
+      payload.addressUz = addressUz;
+      if (hasAddressRu) {
+        payload.addressRu = addressRuRaw ?? "";
+      }
+      if (hasAddressEn) {
+        payload.addressEn = addressEnRaw ?? "";
+      }
+
+      return payload;
     },
     service: {
       list: () => LocationControllerService.list5(),

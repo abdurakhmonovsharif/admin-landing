@@ -8,6 +8,9 @@ export const $Location = {
       type: 'number',
       format: 'int64',
     },
+    region: {
+      type: 'string',
+    },
     nameUz: {
       type: 'string',
     },
@@ -15,6 +18,15 @@ export const $Location = {
       type: 'string',
     },
     nameEn: {
+      type: 'string',
+    },
+    addressUz: {
+      type: 'string',
+    },
+    addressRu: {
+      type: 'string',
+    },
+    addressEn: {
       type: 'string',
     },
     mapTag: {

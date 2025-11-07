@@ -8,7 +8,9 @@ export type Contact = {
   email?: string;
   address?: string;
   socialMedia?: Array<string>;
+  banner?: string;
+  bannerMediaType?: "image" | "video";
+  introductionVideo?: string;
   createdAt?: string;
   updatedAt?: string;
 };
-

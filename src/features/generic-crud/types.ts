@@ -48,7 +48,6 @@ export type FieldDescriptor =
       type: "social-links";
       name: string;
       label: string;
-      uploadCategory: string;
       helperText?: string;
     }
   | {

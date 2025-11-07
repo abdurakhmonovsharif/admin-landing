@@ -23,6 +23,9 @@ export const $Contact = {
         type: 'string',
       },
     },
+    introductionVideo: {
+      type: 'string',
+    },
     createdAt: {
       type: 'string',
       format: 'date-time',
